@@ -468,11 +468,11 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 
     <div class="g2">
       <div class="card">
-        <div class="card-title">Top 20 Marcas Foco Reportando Venta</div>
+        <div class="card-title">Marcas Foco Reportando Venta — Top Crecimiento</div>
         <div id="top-marcas-c" class="blist"></div>
       </div>
       <div class="card">
-        <div class="card-title">Marcas Foco Reportando Venta — Top Riesgo</div>
+        <div class="card-title">Marcas Foco Reportando Venta — Top Caída</div>
         <div id="top-riesgo-c" class="blist"></div>
       </div>
     </div>
@@ -1254,7 +1254,7 @@ function renderComparativoVM2G() {
           label: c => c.raw !== null ? '  ' + c.dataset.label + ': ' + fm2(c.raw) : null
         }}
       },
-      scales:{y:{ticks:{callback:v=>fm2(v), font:{family:'DM Mono',size:10}}, grid:{color:'#f0f0f0'}},
+      scales:{y:{ticks:{callback:v=>fv(v)+'/m²', font:{family:'DM Mono',size:10}}, grid:{color:'#f0f0f0'}},
         x:{ticks:{font:{family:'Sora',size:11}}}}}
   });
 }
@@ -1470,28 +1470,16 @@ function renderIngC() {
 function renderTopMarcasC() {
   const rows = filteredCeco(ceco);
   const byMarca = groupBy(rows, r=>r.marca);
-  const focoMarcas = byMarca.filter(r=>r.marca_foco==='SI');
-  const sorted = [...focoMarcas].sort((a,b)=>b.venta-a.venta).slice(0,20);
-  document.getElementById('top-marcas-c').innerHTML = sorted.map((r,i) => `
-    <div class="brow">
-      <div class="brow-left">
-        <span class="brow-name">${i+1}. ${r.marca}</span>
-        <span class="brow-sub">${r.categoria||''} · ${r.mm_mt||''}</span>
-      </div>
-      <div class="brow-right">
-        <span class="brow-val">${fv(r.venta)}</span>
-        ${r.venta_ant>0?chip(delta(r.venta,r.venta_ant)):''}
-        <span class="badge-foco">FOCO</span>
-      </div>
-    </div>`).join('') || '<p style="color:var(--txt3);font-size:12px">Sin marcas FOCO</p>';
+  const withDelta = byMarca.map(r => ({...r, dv: delta(r.venta, r.venta_ant)}))
+    .filter(r => r.venta_ant > 0 && r.dv !== null && r.marca_foco === 'SI');
 
-  const riesgo = focoMarcas.filter(r=>r.venta_ant>0 && r.venta<r.venta_ant)
-    .map(r=>({...r, dv:delta(r.venta,r.venta_ant)}))
-    .sort((a,b)=>a.dv-b.dv).slice(0,10);
-  document.getElementById('top-riesgo-c').innerHTML = riesgo.map((r,i) => `
+  const top = [...withDelta].sort((a,b)=>b.dv-a.dv).slice(0,10);
+  const bot = [...withDelta].sort((a,b)=>a.dv-b.dv).slice(0,10);
+
+  const rowHtml = (r, pos) => `
     <div class="brow">
       <div class="brow-left">
-        <span class="brow-name">${i+1}. ${r.marca}</span>
+        <span class="brow-name">${pos+1}. ${r.marca}</span>
         <span class="brow-sub">${r.categoria||''}</span>
       </div>
       <div class="brow-right">
@@ -1499,7 +1487,10 @@ function renderTopMarcasC() {
         ${chip(r.dv)}
         <span class="badge-foco">FOCO</span>
       </div>
-    </div>`).join('') || '<p style="color:var(--txt3);font-size:12px">Sin caídas en marcas FOCO</p>';
+    </div>`;
+
+  document.getElementById('top-marcas-c').innerHTML = top.map(rowHtml).join('') || '<p style="color:var(--txt3);font-size:12px">Sin datos comparables</p>';
+  document.getElementById('top-riesgo-c').innerHTML = bot.map(rowHtml).join('') || '<p style="color:var(--txt3);font-size:12px">Sin datos comparables</p>';
 }
 
 function sortMarcas(col) {
