@@ -113,6 +113,9 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .rtbl tr:hover td{background:var(--surf)}
 .rtbl .num{font-family:var(--mono);text-align:right}
 .rtbl .ceco-name{font-weight:600;font-size:12px}
+.rtbl th{cursor:pointer;user-select:none}
+.rtbl th.sort-asc::after{content:' ▲';font-size:9px}
+.rtbl th.sort-desc::after{content:' ▼';font-size:9px}
 .bar-bg{background:var(--surf2);border-radius:3px;height:5px;width:80px;display:inline-block;vertical-align:middle}
 .bar-fill{height:5px;border-radius:3px;background:var(--dg)}
 /* TOP MARCAS */
@@ -169,7 +172,7 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
     <span class="ctrl-label">Vista</span>
     <div class="vtab-row">
       <button class="vtab active" id="btn-ger" onclick="setView('gerencia',this)">Gerencia General</button>
-      <button class="vtab" id="btn-ceco" onclick="setView('ceco',this)">Por Centro Comercial</button>
+      <button class="vtab" id="btn-ceco" onclick="setView('ceco',this)">Por CECO</button>
     </div>
   </div>
 
@@ -179,7 +182,7 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
     <span class="ctrl-label">Modo</span>
     <div class="vtab-row">
       <button class="vtab active" id="btn-unico" onclick="setModo(false)">Mes único</button>
-      <button class="vtab" id="btn-comp" onclick="setModo(true)">Comparar meses</button>
+      <button class="vtab" id="btn-comp" onclick="setModo(true)">Acumular meses</button>
     </div>
   </div>
 
@@ -207,6 +210,25 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
   </div>
 
   <div class="ctrl-group">
+    <span class="ctrl-label">Marca</span>
+    <div class="cat-wrap">
+      <button class="cat-btn" id="marca-fil-btn" onclick="toggleMarcaFil(event)">TODAS ▾</button>
+      <div class="cat-menu" id="marca-fil-menu">
+        <div class="cat-menu-item" style="padding:4px 8px">
+          <input type="search" id="marca-fil-search" placeholder="Buscar marca…" style="width:100%;font-size:12px;border:1px solid var(--brd);border-radius:4px;padding:3px 6px" oninput="filterMarcaFil(this.value)">
+        </div>
+        <div class="cat-menu-sep"></div>
+        <div class="cat-menu-item" onclick="toggleAllMarca()">
+          <input type="checkbox" id="marca-fil-all" checked>
+          <label for="marca-fil-all" style="cursor:pointer;font-weight:700">Todas las marcas</label>
+        </div>
+        <div class="cat-menu-sep"></div>
+        <div id="marca-fil-list" style="max-height:220px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctrl-group">
     <span class="ctrl-label">Foco</span>
     <div class="pill-row">
       <button class="pill pill-sm active" id="btn-todo-foco" onclick="setFoco(false)">Todo</button>
@@ -230,13 +252,17 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
     <div class="section-title">Ingresos por Marca</div>
     <div class="kpi-grid" id="kpis-ingresos-g"></div>
 
-    <div class="g2" style="margin-top:14px">
+    <div class="g3" style="margin-top:14px">
+      <div class="card">
+        <div class="card-title">Ranking de Venta por m²</div>
+        <div id="tbl-vm2" style="overflow-x:auto"></div>
+      </div>
       <div class="card">
         <div class="card-title">Evolución Mensual — Ventas</div>
         <div class="ch-wrap" style="height:260px"><canvas id="ch-evol-g"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title">Ranking de Centros</div>
+        <div class="card-title">Ranking de CECOs</div>
         <div id="tbl-rank" style="overflow-x:auto"></div>
       </div>
     </div>
@@ -247,29 +273,34 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
         <div class="ch-wrap" style="height:210px"><canvas id="ch-cat-pie"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title">Cumplimiento Presupuesto por Centro</div>
+        <div class="card-title">Cumplimiento Presupuesto por CECO</div>
         <div class="ch-wrap" style="height:210px"><canvas id="ch-ppto-g"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title">Ingresos por Centro</div>
+        <div class="card-title">Ingresos por CECO</div>
         <div class="ch-wrap" style="height:210px"><canvas id="ch-ing-g"></canvas></div>
       </div>
     </div>
 
-    <div class="g46">
-      <div>
-        <div class="card" style="margin-bottom:12px">
-          <div class="card-title">Top 10 Crecimiento vs 2025</div>
-          <div id="top-crec" class="blist"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Top 10 Caída vs 2025</div>
-          <div id="top-caida" class="blist"></div>
-        </div>
+    <div class="g2">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Marcas Foco Reportando Venta — Top Crecimiento</div>
+        <div id="top-crec" class="blist"></div>
       </div>
       <div class="card">
-        <div class="card-title">Comparativo entre Centros — Evolución</div>
+        <div class="card-title">Marcas Foco Reportando Venta — Top Caída</div>
+        <div id="top-caida" class="blist"></div>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Comparativo entre CECOs — Evolución</div>
         <div class="ch-wrap" style="height:300px"><canvas id="ch-comp-g"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Comparativo entre CECOs — Evolución Venta / m²</div>
+        <div class="ch-wrap" style="height:300px"><canvas id="ch-comp-vm2-g"></canvas></div>
       </div>
     </div>
 
@@ -278,7 +309,7 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
   <!-- ===== VISTA CECO ===== -->
   <div id="view-ceco" hidden>
 
-    <div class="section-title" id="ceco-titulo">Centro Comercial</div>
+    <div class="section-title" id="ceco-titulo">CECO</div>
 
     <div class="kpi-grid" id="kpis-ventas-c"></div>
 
@@ -309,11 +340,11 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 
     <div class="g2">
       <div class="card">
-        <div class="card-title">Top 20 Marcas por Venta 2026</div>
+        <div class="card-title">Top 20 Marcas Foco Reportando Venta</div>
         <div id="top-marcas-c" class="blist"></div>
       </div>
       <div class="card">
-        <div class="card-title">Top 10 Marcas en Riesgo (Caída vs 2025)</div>
+        <div class="card-title">Marcas Foco Reportando Venta — Top Riesgo</div>
         <div id="top-riesgo-c" class="blist"></div>
       </div>
     </div>
@@ -329,7 +360,6 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
             <tr>
               <th onclick="sortMarcas('marca')">Marca</th>
               <th onclick="sortMarcas('categoria')">Categoría</th>
-              <th style="text-align:center">MM/MT</th>
               <th class="num" onclick="sortMarcas('area')">Área m²</th>
               <th class="num" onclick="sortMarcas('venta')">Venta 2026</th>
               <th class="num" onclick="sortMarcas('vxm2')">Venta/m²</th>
@@ -377,15 +407,18 @@ let soloFoco = false;
 let charts = {};
 let mSort = {col:'venta', dir:-1};
 let mSearch = '';
+let marcaFiltro = [];
+let rSort = {col:'v', dir:-1};
 
 /* ── FILTROS ── */
-function inMes(r)  { return mesesActivos.includes(r.mes); }
-function inMmMt(r) { return mmMt === 'MT' || r.mm_mt === 'MM'; }
-function inCat(r)  { return catFiltro.length === 0 || catFiltro.includes(r.categoria); }
-function inFoco(r) { return !soloFoco || r.marca_foco === 'SI'; }
+function inMes(r)   { return mesesActivos.includes(r.mes); }
+function inMmMt(r)  { return mmMt === 'MT' || r.mm_mt === 'MM'; }
+function inCat(r)   { return catFiltro.length === 0 || catFiltro.includes(r.categoria); }
+function inFoco(r)  { return !soloFoco || r.marca_foco === 'SI'; }
+function inMarca(r) { return marcaFiltro.length === 0 || marcaFiltro.includes(r.marca); }
 
 function filtered(extra) {
-  return D.por_marca.filter(r => inMes(r) && inMmMt(r) && inCat(r) && inFoco(r) && (!extra || extra(r)));
+  return D.por_marca.filter(r => inMes(r) && inMmMt(r) && inCat(r) && inFoco(r) && inMarca(r) && (!extra || extra(r)));
 }
 function filteredCeco(c) { return filtered(r => r.ceco === c); }
 
@@ -434,7 +467,7 @@ const COP = new Intl.NumberFormat('es-CO', {maximumFractionDigits:0});
 function fv(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   const a = Math.abs(n);
-  if (a >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (a >= 1e9) return '$' + (n/1e9).toFixed(1) + 'MM';
   if (a >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
   if (a >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
   return '$' + COP.format(n);
@@ -499,6 +532,7 @@ function init() {
   buildMesPills();
   buildCecoTabs();
   buildCatMenu();
+  buildMarcaFil();
   updateMtBtn();
   document.getElementById('footer-info').textContent =
     `${D.total_registros} registros · Meses: ${D.meses.map(m=>MES_SHORT[m]).join(', ')} · Gran Plaza 2026`;
@@ -507,6 +541,10 @@ function init() {
     if (!document.getElementById('cat-btn').contains(e.target) &&
         !document.getElementById('cat-menu').contains(e.target)) {
       document.getElementById('cat-menu').classList.remove('open');
+    }
+    if (!document.getElementById('marca-fil-btn').contains(e.target) &&
+        !document.getElementById('marca-fil-menu').contains(e.target)) {
+      document.getElementById('marca-fil-menu').classList.remove('open');
     }
   });
   document.getElementById('marca-search').addEventListener('input', e => {
@@ -584,6 +622,55 @@ function updateCatBtn() {
   else { btn.textContent = catFiltro.length + ' CAT. ▾'; btn.classList.add('has-filter'); }
 }
 
+function buildMarcaFil() {
+  const marcas = [...new Set(D.por_marca.map(r => r.marca))].sort();
+  const list = document.getElementById('marca-fil-list');
+  list.innerHTML = '';
+  marcas.forEach(m => {
+    const id = 'mf-' + m.replace(/[^a-zA-Z0-9]/g,'_');
+    const div = document.createElement('div');
+    div.className = 'cat-menu-item marca-fil-item';
+    div.dataset.marca = m.toLowerCase();
+    div.innerHTML = `<input type="checkbox" id="${id}" value="${m}" onchange="onMarcaFilChange()"> <label for="${id}" style="cursor:pointer;font-size:12px">${m}</label>`;
+    list.appendChild(div);
+  });
+}
+
+function toggleMarcaFil(e) {
+  e.stopPropagation();
+  document.getElementById('marca-fil-menu').classList.toggle('open');
+}
+
+function filterMarcaFil(q) {
+  const s = q.toLowerCase();
+  document.querySelectorAll('.marca-fil-item').forEach(d => {
+    d.style.display = d.dataset.marca.includes(s) ? '' : 'none';
+  });
+}
+
+function toggleAllMarca() {
+  const all = document.getElementById('marca-fil-all').checked;
+  document.querySelectorAll('#marca-fil-list input[type=checkbox]').forEach(c => { c.checked = all; });
+  marcaFiltro = [];
+  updateMarcaFilBtn();
+  renderAll();
+}
+
+function onMarcaFilChange() {
+  const total = document.querySelectorAll('#marca-fil-list input[value]').length;
+  const checked = [...document.querySelectorAll('#marca-fil-list input[value]')].filter(c => c.checked).map(c => c.value);
+  marcaFiltro = checked.length === total ? [] : checked;
+  document.getElementById('marca-fil-all').checked = (marcaFiltro.length === 0);
+  updateMarcaFilBtn();
+  renderAll();
+}
+
+function updateMarcaFilBtn() {
+  const btn = document.getElementById('marca-fil-btn');
+  if (marcaFiltro.length === 0) { btn.textContent = 'TODAS ▾'; btn.classList.remove('has-filter'); }
+  else { btn.textContent = marcaFiltro.length + ' selec. ▾'; btn.classList.add('has-filter'); }
+}
+
 /* ── CONTROLES ── */
 function toggleMes(m) {
   if (modoComparar) {
@@ -656,11 +743,30 @@ function renderGerencia() {
   renderKpisIngresosG();
   renderEvolG();
   renderRankingG();
+  renderVM2G();
   renderCatPieG();
   renderPptoG();
   renderIngresosG();
   renderTopMarcasG();
   renderComparativoG();
+  renderComparativoVM2G();
+}
+
+function renderVM2G() {
+  const el = document.getElementById('tbl-vm2');
+  const data = D.cecos.map(c => {
+    const rows = filtered(r => r.ceco === c);
+    const v = sum(rows, 'venta');
+    const ac = areaActivaCalc(rows);
+    return {c, vxm2: ac > 0 ? v / ac : null};
+  }).filter(d => d.vxm2 !== null).sort((a, b) => b.vxm2 - a.vxm2);
+  el.innerHTML = `<table class="rtbl"><thead><tr>
+    <th>CECO</th><th class="num">Venta / m²</th>
+  </tr></thead><tbody>` +
+  data.map(d => `<tr>
+    <td class="ceco-name">${cecoShort(d.c)}</td>
+    <td class="num">${fm2(d.vxm2)}</td>
+  </tr>`).join('') + '</tbody></table>';
 }
 
 function renderKpisVentasG() {
@@ -721,12 +827,12 @@ function renderKpisVentasG() {
       <div class="kpi-sub">con venta &gt; 0</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Mejor Centro (PPT)</div>
+      <div class="kpi-label">Mejor CECO (PPT)</div>
       <div class="kpi-val xs">${mejorCeco ? cecoShort(mejorCeco.c) : '—'}</div>
       <div class="kpi-sub">${mejorCeco ? chipPpto(mejorCeco.r) : ''}</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Centro a Reforzar</div>
+      <div class="kpi-label">CECO a Reforzar</div>
       <div class="kpi-val xs">${peorCeco ? cecoShort(peorCeco.c) : '—'}</div>
       <div class="kpi-sub">${peorCeco ? chipPpto(peorCeco.r) : ''}</div>
     </div>
@@ -800,6 +906,7 @@ function renderEvolG() {
   const marcasXMes = D.meses.map(m =>
     new Set(allRows.filter(r=>r.mes===m && r.venta>0).map(r=>r.ceco+'|'+r.marca)).size
   );
+  const varPctG = D.meses.map((_,i) => ventaA[i] ? (venta[i] - ventaA[i]) / ventaA[i] * 100 : null);
   const ctx = document.getElementById('ch-evol-g').getContext('2d');
   charts['ch-evol-g'] = new Chart(ctx, {
     type:'line',
@@ -815,12 +922,24 @@ function renderEvolG() {
       plugins:{legend:{labels:{font:{family:'Sora',size:11},boxWidth:14}},
         tooltip:{mode:'index', intersect:false, callbacks:{
           label: c => '  ' + c.dataset.label + ': ' + fvFull(c.raw),
-          footer: items => items.length ? 'Marcas reportando: ' + marcasXMes[items[0].dataIndex] : ''
+          footer: items => {
+            if (!items.length) return '';
+            const idx = items[0].dataIndex;
+            const v = varPctG[idx];
+            const pctStr = v !== null ? (v >= 0 ? '+' : '') + v.toFixed(1) + '% 2026 vs 2025' : '';
+            return ['Marcas reportando: ' + marcasXMes[idx], pctStr].filter(Boolean).join('\n');
+          }
         }}},
       scales:{y:{ticks:{font:{family:'DM Mono',size:10},
         callback:v=>fv(v)}, grid:{color:'#f0f0f0'}},
         x:{ticks:{font:{family:'Sora',size:11}}}}}
   });
+}
+
+function sortRanking(col) {
+  if (rSort.col === col) rSort.dir *= -1;
+  else { rSort.col = col; rSort.dir = -1; }
+  renderRankingG();
 }
 
 function renderRankingG() {
@@ -835,10 +954,22 @@ function renderRankingG() {
     const vxm2 = ac>0 ? v/ac : null;
     return {c, v, va, p, dv:delta(v,va), dp:pctOf(v,p), cumplV:pctOf(ingV,pptV), te, vxm2};
   });
-  data.sort((a,b) => b.v - a.v);
-  el.innerHTML = `<table class="rtbl"><thead><tr>
-    <th>Centro</th><th class="num">Venta 2026</th><th class="num">Venta/m²</th><th class="num">vs 2025</th><th class="num">vs PPT Ventas</th><th class="num">Cumpl. Ing. Variable</th><th class="num">TE</th>
-  </tr></thead><tbody>` +
+  data.sort((a,b) => {
+    const va = a[rSort.col] ?? -Infinity;
+    const vb = b[rSort.col] ?? -Infinity;
+    return (va < vb ? -1 : va > vb ? 1 : 0) * rSort.dir;
+  });
+  const cols = [
+    {key:'c', label:'CECO'}, {key:'v', label:'Venta 2026'}, {key:'vxm2', label:'Venta/m²'},
+    {key:'dv', label:'vs 2025'}, {key:'dp', label:'vs PPT Ventas'},
+    {key:'cumplV', label:'Cumpl. Ing. Variable'}, {key:'te', label:'TE'}
+  ];
+  const thHtml = cols.map(col => {
+    const cls = col.key !== 'c' ? ' class="num"' : '';
+    const sortCls = rSort.col === col.key ? (rSort.dir > 0 ? ' sort-asc' : ' sort-desc') : '';
+    return `<th${cls} class="${sortCls.trim()}" onclick="sortRanking('${col.key}')">${col.label}</th>`;
+  }).join('');
+  el.innerHTML = `<table class="rtbl"><thead><tr>${thHtml}</tr></thead><tbody>` +
   data.map(d => `<tr>
     <td class="ceco-name">${cecoShort(d.c)}</td>
     <td class="num">${fv(d.v)}</td>
@@ -970,6 +1101,36 @@ function renderComparativoG() {
   });
 }
 
+function renderComparativoVM2G() {
+  dc('ch-comp-vm2-g');
+  const allRows = filteredAllMeses();
+  const labels = D.meses.map(m => MES_SHORT[m]);
+  const datasets = D.cecos.map((c,i) => ({
+    label: cecoShort(c),
+    data: D.meses.map(m => {
+      const rows = allRows.filter(r => r.ceco===c && r.mes===m);
+      const v = sum(rows, 'venta');
+      const ac = areaActivaCalc(rows);
+      return ac > 0 ? v / ac : null;
+    }),
+    borderColor: CC[i%CC.length], backgroundColor: CC[i%CC.length]+'33',
+    tension:.35, pointRadius:3, borderWidth:2, fill:false, spanGaps:true
+  }));
+  const ctx = document.getElementById('ch-comp-vm2-g').getContext('2d');
+  charts['ch-comp-vm2-g'] = new Chart(ctx, {
+    type:'line', data:{labels, datasets},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{font:{family:'Sora',size:10},boxWidth:14}},
+        tooltip:{mode:'index', intersect:false, callbacks:{
+          label: c => c.raw !== null ? '  ' + c.dataset.label + ': ' + fm2(c.raw) : null
+        }}
+      },
+      scales:{y:{ticks:{callback:v=>fm2(v), font:{family:'DM Mono',size:10}}, grid:{color:'#f0f0f0'}},
+        x:{ticks:{font:{family:'Sora',size:11}}}}}
+  });
+}
+
 /* ════════════════════════════════════
    VISTA CECO
 ════════════════════════════════════ */
@@ -1088,6 +1249,7 @@ function renderEvolC() {
   const marcasXMes = D.meses.map(m =>
     new Set(allRows.filter(r=>r.mes===m && r.venta>0).map(r=>r.marca)).size
   );
+  const varPctC = D.meses.map((_,i) => ventaA[i] ? (venta[i] - ventaA[i]) / ventaA[i] * 100 : null);
   const ctx = document.getElementById('ch-evol-c').getContext('2d');
   charts['ch-evol-c'] = new Chart(ctx, {
     type:'line', data:{labels, datasets:[
@@ -1099,7 +1261,13 @@ function renderEvolC() {
       plugins:{legend:{labels:{font:{family:'Sora',size:11},boxWidth:14}},
         tooltip:{mode:'index', intersect:false, callbacks:{
           label: c => '  ' + c.dataset.label + ': ' + fvFull(c.raw),
-          footer: items => items.length ? 'Marcas reportando: ' + marcasXMes[items[0].dataIndex] : ''
+          footer: items => {
+            if (!items.length) return '';
+            const idx = items[0].dataIndex;
+            const v = varPctC[idx];
+            const pctStr = v !== null ? (v >= 0 ? '+' : '') + v.toFixed(1) + '% 2026 vs 2025' : '';
+            return ['Marcas reportando: ' + marcasXMes[idx], pctStr].filter(Boolean).join('\n');
+          }
         }}},
       scales:{y:{ticks:{callback:v=>fv(v), font:{family:'DM Mono',size:10}}, grid:{color:'#f0f0f0'}},
         x:{ticks:{font:{family:'Sora',size:11}}}}}
@@ -1246,7 +1414,6 @@ function renderMarcaTable() {
   tbody.innerHTML = filtered2.map(r => `<tr>
     <td class="marca-cell" title="${r.marca}">${r.marca}</td>
     <td style="font-size:11px">${r.categoria||''}</td>
-    <td style="text-align:center"><span class="chip chip-n" style="font-size:10px">${r.mm_mt||''}</span></td>
     <td class="num">${fn(r.area)}</td>
     <td class="num">${fvFull(r.venta)}</td>
     <td class="num">${fm2(r.vxm2)}</td>
