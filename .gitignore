@@ -5,6 +5,10 @@
 # Archivos temporales de debug
 check_html.py
 
+# Archivos de entrada para Claude
+claude_inputs.docx
+corrercodigo.txt
+
 # Python cache
 __pycache__/
 *.pyc
