@@ -4,6 +4,8 @@ import os
 import pandas as pd
 
 EXCEL_PATH = 'Archivo Crudo_Datos Cierre Ventas 2026_actualizado.xlsx'
+TRAFICO_PATH = 'trafico.xlsx'
+PPTO_VM2_PATH = 'ppto vm2.xlsx'
 OUTPUT_PATH = 'dashboard_ventas_mensuales.html'
 
 MES_LABEL = {1:'ENE',2:'FEB',3:'MAR',4:'ABR',5:'MAY',6:'JUN',
@@ -34,6 +36,51 @@ def cargar_datos(path):
     if 'INGRESO VARIABLE REAL  2026' in df.columns:
         df = df.rename(columns={'INGRESO VARIABLE REAL  2026': 'INGRESO VARIABLE REAL 2026'})
     return df
+
+
+def cargar_trafico(path):
+    df = pd.read_excel(path, sheet_name='Tráfico (Base de datos)')
+    df.columns = df.columns.str.strip()
+    cols = ['CECO', 'FECHA', 'AÑO', 'MES', 'TRÁFICO', 'Anterior (Calendario Fecha/Fecha)']
+    df = df[[c for c in cols if c in df.columns]]
+    df['FECHA'] = pd.to_datetime(df['FECHA'])
+    df['dow'] = df['FECHA'].dt.dayofweek  # 0=lunes ... 6=domingo
+    return df
+
+
+def _build_trafico(df):
+    d = df[df['AÑO'] == 2026].copy()
+    # Clasificación propia lunes-jueves ("ES") / viernes-domingo ("FDS"),
+    # distinta de la columna SEMANA del archivo (que marca viernes como entre semana).
+    d['grupo_dia'] = d['dow'].apply(lambda x: 'ES' if x <= 3 else 'FDS')
+    d = d.rename(columns={
+        'CECO': 'ceco',
+        'MES': 'mes',
+        'TRÁFICO': 'trafico',
+        'Anterior (Calendario Fecha/Fecha)': 'trafico_ant',
+    })
+    d = d[['ceco', 'mes', 'grupo_dia', 'trafico', 'trafico_ant']]
+    return _clean_records(d.to_dict(orient='records'))
+
+
+def cargar_ppto_vm2(path):
+    df = pd.read_excel(path, sheet_name='BD_COMPLETA_NEW')
+    df.columns = df.columns.str.strip()
+    cols = ['Nombre Activo', 'Mes', 'Área', 'Venta Proy 2026', 'tipo de ppto mm o mt', 'Categoria', 'Marcas Foco']
+    return df[[c for c in cols if c in df.columns]]
+
+
+def _build_ppto_vm2(df):
+    d = df.rename(columns={
+        'Nombre Activo': 'ceco',
+        'Mes': 'mes',
+        'Área': 'area',
+        'Venta Proy 2026': 'venta_proy',
+        'tipo de ppto mm o mt': 'mm_mt',
+        'Categoria': 'categoria',
+        'Marcas Foco': 'marca_foco',
+    })
+    return _clean_records(d.to_dict(orient='records'))
 
 
 def _build_resumen(df):
@@ -83,7 +130,7 @@ def _build_area_por_ceco(df):
     return {k: _clean(float(v)) for k, v in totals.items()}
 
 
-def construir_D(path):
+def construir_D(path, trafico_path=None, ppto_vm2_path=None):
     df = cargar_datos(path)
     meses = sorted(df['MES'].dropna().unique().astype(int).tolist())
     cecos = sorted(df['NOMBRE ACTIVO'].dropna().unique().tolist())
@@ -101,6 +148,8 @@ def construir_D(path):
         'por_marca': _build_por_marca(df),
         'por_categoria': _build_por_categoria(df),
         'area_por_ceco': _build_area_por_ceco(df),
+        'trafico': _build_trafico(cargar_trafico(trafico_path)) if trafico_path else [],
+        'ppto_vm2': _build_ppto_vm2(cargar_ppto_vm2(ppto_vm2_path)) if ppto_vm2_path else [],
     }
     return D
 
@@ -117,12 +166,18 @@ def render_html(D, output_path):
 def main():
     base = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(base, EXCEL_PATH)
+    trafico_path = os.path.join(base, TRAFICO_PATH)
+    ppto_vm2_path = os.path.join(base, PPTO_VM2_PATH)
     out  = os.path.join(base, OUTPUT_PATH)
     print(f'Cargando: {path}')
-    D = construir_D(path)
+    print(f'Cargando: {trafico_path}')
+    print(f'Cargando: {ppto_vm2_path}')
+    D = construir_D(path, trafico_path, ppto_vm2_path)
     print(f"  Meses    : {D['meses']}")
     print(f"  CECOs    : {len(D['cecos'])} centros")
     print(f"  Registros: {D['total_registros']}")
+    print(f"  Trafico  : {len(D['trafico'])} registros")
+    print(f"  Ppto VM2 : {len(D['ppto_vm2'])} registros")
     render_html(D, out)
 
 
@@ -380,6 +435,9 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
     <div class="section-title">Ingresos por Marca</div>
     <div class="kpi-grid" id="kpis-ingresos-g"></div>
 
+    <div class="section-title">Tráfico</div>
+    <div class="kpi-grid" id="kpis-trafico-g"></div>
+
     <div class="g3" style="margin-top:14px">
       <div class="card">
         <div class="card-title">Ranking de Venta por m²</div>
@@ -443,6 +501,9 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 
     <div class="section-title">Ingresos por Marca</div>
     <div class="kpi-grid" id="kpis-ingresos-c"></div>
+
+    <div class="section-title">Tráfico</div>
+    <div class="kpi-grid" id="kpis-trafico-c"></div>
 
     <div class="g2" style="margin-top:14px">
       <div class="card">
@@ -545,10 +606,31 @@ function inCat(r)   { return catFiltro.length === 0 || catFiltro.includes(r.cate
 function inFoco(r)  { return !soloFoco || r.marca_foco === 'SI'; }
 function inMarca(r) { return marcaFiltro.length === 0 || marcaFiltro.includes(r.marca); }
 
+/* ── FILTROS PRESUPUESTO VM2 ── */
+function inMesPpto(r)  { return mesesActivos.includes(r.mes); }
+function inMmMtPpto(r) { return mmMt === 'MT' || r.mm_mt === 'MM'; }
+function filteredPptoVm2(extra) {
+  return D.ppto_vm2.filter(r => inMesPpto(r) && inMmMtPpto(r) && inCat(r) && inFoco(r) && (!extra || extra(r)));
+}
+function filteredPptoVm2Ceco(c) { return filteredPptoVm2(r => r.ceco === c); }
+
+function calcPptoVm2(rows) {
+  const venta = sum(rows, 'venta_proy');
+  const area = sum(rows, 'area');
+  return area > 0 ? venta / area : null;
+}
+
 function filtered(extra) {
   return D.por_marca.filter(r => inMes(r) && inMmMt(r) && inCat(r) && inFoco(r) && inMarca(r) && (!extra || extra(r)));
 }
 function filteredCeco(c) { return filtered(r => r.ceco === c); }
+
+/* ── FILTROS TRÁFICO ── */
+function inMesT(r) { return mesesActivos.includes(r.mes); }
+function filteredTrafico(extra) {
+  return D.trafico.filter(r => inMesT(r) && (!extra || extra(r)));
+}
+function filteredTraficoCeco(c) { return filteredTrafico(r => r.ceco === c); }
 
 /* Por todos los meses (para gráficos de evolución) */
 function filteredAllMeses(extra) {
@@ -608,6 +690,13 @@ function fn(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return COP.format(Math.round(n));
 }
+function ftraf(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (a >= 1e3) return (n/1e3).toFixed(0) + 'K';
+  return COP.format(Math.round(n));
+}
 function fp(v, dec=1) {
   if (v === null || v === undefined || isNaN(v)) return '—';
   return (v >= 0 ? '+' : '') + v.toFixed(dec) + '%';
@@ -635,9 +724,9 @@ function chipPpto(val) {
   return `<span class="chip ${cls}">${icon} ${val.toFixed(1)}%</span>`;
 }
 function chipTE(val) {
-  // TE: ratio ingreso/venta — typical range 5-15%, higher is better
+  // TE: ratio ingreso/venta — typical range 5-15%, lower is better
   if (val === null || val === undefined || isNaN(val)) return '<span class="chip chip-n">—</span>';
-  const cls = val >= 10 ? 'chip-g' : val >= 6 ? 'chip-y' : 'chip-r';
+  const cls = val <= 6 ? 'chip-g' : val <= 10 ? 'chip-y' : 'chip-r';
   return `<span class="chip ${cls}">${val.toFixed(2)}%</span>`;
 }
 
@@ -751,7 +840,9 @@ function updateCatBtn() {
 }
 
 function buildMarcaFil() {
-  const marcas = [...new Set(D.por_marca.map(r => r.marca))].sort();
+  const rows = (view === 'ceco') ? D.por_marca.filter(r => r.ceco === ceco) : D.por_marca;
+  const marcas = [...new Set(rows.map(r => r.marca))].sort();
+  marcaFiltro = marcaFiltro.filter(m => marcas.includes(m));
   const list = document.getElementById('marca-fil-list');
   list.innerHTML = '';
   marcas.forEach(m => {
@@ -762,6 +853,8 @@ function buildMarcaFil() {
     div.innerHTML = `<input type="checkbox" id="${id}" value="${m}" onchange="onMarcaFilChange()"> <label for="${id}" style="cursor:pointer;font-size:12px">${m}</label>`;
     list.appendChild(div);
   });
+  document.getElementById('marca-fil-all').checked = (marcaFiltro.length === 0);
+  updateMarcaFilBtn();
 }
 
 function toggleMarcaFil(e) {
@@ -846,6 +939,7 @@ function setView(v, el) {
   document.getElementById('ctab-row').hidden = (v !== 'ceco');
   document.getElementById('btn-ger').classList.toggle('active', v==='gerencia');
   document.getElementById('btn-ceco').classList.toggle('active', v==='ceco');
+  buildMarcaFil();
   renderAll();
 }
 
@@ -854,6 +948,7 @@ function setCeco(c) {
   document.querySelectorAll('.ctab').forEach(b => b.classList.remove('active'));
   const tab = document.getElementById('ctab-' + c);
   if (tab) tab.classList.add('active');
+  buildMarcaFil();
   renderCecoView();
 }
 
@@ -869,6 +964,7 @@ function renderAll() {
 function renderGerencia() {
   renderKpisVentasG();
   renderKpisIngresosG();
+  renderKpisTraficoG();
   renderEvolG();
   renderRankingG();
   renderVM2G();
@@ -886,14 +982,17 @@ function renderVM2G() {
     const rows = filtered(r => r.ceco === c);
     const v = sum(rows, 'venta');
     const ac = areaActivaCalc(rows);
-    return {c, vxm2: ac > 0 ? v / ac : null};
+    const vxm2 = ac > 0 ? v / ac : null;
+    const pptoVm2 = calcPptoVm2(filteredPptoVm2Ceco(c));
+    return {c, vxm2, cumpl: pctOf(vxm2, pptoVm2)};
   }).filter(d => d.vxm2 !== null).sort((a, b) => b.vxm2 - a.vxm2);
   el.innerHTML = `<table class="rtbl"><thead><tr>
-    <th>CECO</th><th class="num">Venta / m²</th>
+    <th>CECO</th><th class="num">Venta / m²</th><th class="num">% Cumpl. PPTO VM2</th>
   </tr></thead><tbody>` +
   data.map(d => `<tr>
     <td class="ceco-name">${cecoShort(d.c)}</td>
     <td class="num">${fm2(d.vxm2)}</td>
+    <td class="num">${chipPpto(d.cumpl)}</td>
   </tr>`).join('') + '</tbody></table>';
 }
 
@@ -907,6 +1006,7 @@ function renderKpisVentasG() {
   const dvsAnt = delta(venta, venta_ant);
   const dvsPpto = pctOf(venta, ppto);
   const vxm2 = areaCalc > 0 ? venta/areaCalc : null;
+  const pptoVm2 = calcPptoVm2(filteredPptoVm2());
 
   const marcasRep = new Set(rows.filter(r=>r.venta>0).map(r=>r.ceco+'|'+r.marca)).size;
   const marcasFoco = new Set(rows.filter(r=>r.venta>0 && r.marca_foco==='SI').map(r=>r.ceco+'|'+r.marca)).size;
@@ -945,6 +1045,11 @@ function renderKpisVentasG() {
       <div class="kpi-sub">Área: ${fn(area)} m²</div>
     </div>
     <div class="kpi">
+      <div class="kpi-label">Presupuesto VM2</div>
+      <div class="kpi-val xs">${fm2(pptoVm2)}</div>
+      <div class="kpi-sub">${chipPpto(pctOf(vxm2, pptoVm2))} cumpl.</div>
+    </div>
+    <div class="kpi">
       <div class="kpi-label">Marcas Reportando</div>
       <div class="kpi-val">${marcasRep}</div>
       <div class="kpi-sub">con venta &gt; 0</div>
@@ -965,6 +1070,58 @@ function renderKpisVentasG() {
       <div class="kpi-sub">${peorCeco ? chipPpto(peorCeco.r) : ''}</div>
     </div>
   `;
+}
+
+/* ── TRÁFICO ── */
+function calcTraficoKpis(rows) {
+  const total = sum(rows, 'trafico');
+  const totalAnt = sum(rows, 'trafico_ant');
+  const variacion = delta(total, totalAnt);
+  const es = rows.filter(r => r.grupo_dia === 'ES');
+  const fds = rows.filter(r => r.grupo_dia === 'FDS');
+  const promEs  = es.length  ? sum(es, 'trafico') / es.length : null;
+  const promFds = fds.length ? sum(fds, 'trafico') / fds.length : null;
+  return { total, totalAnt, variacion, promEs, promFds };
+}
+
+function kpisTraficoHTML(k) {
+  return `
+    <div class="kpi">
+      <div class="kpi-label">Tráfico Total 2026</div>
+      <div class="kpi-val sm">${ftraf(k.total)}</div>
+      <div class="kpi-sub">${fn(k.total)} personas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Tráfico Total Año Anterior</div>
+      <div class="kpi-val sm">${ftraf(k.totalAnt)}</div>
+      <div class="kpi-sub">${fn(k.totalAnt)} personas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">% Variación vs Año Anterior</div>
+      <div class="kpi-val sm">${chip(k.variacion)}</div>
+      <div class="kpi-sub">2026 vs 2025</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Tráfico Prom. Entre Semana</div>
+      <div class="kpi-val sm">${ftraf(k.promEs)}</div>
+      <div class="kpi-sub">Lunes a jueves</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Tráfico Prom. Fin de Semana</div>
+      <div class="kpi-val sm">${ftraf(k.promFds)}</div>
+      <div class="kpi-sub">Viernes a domingo</div>
+    </div>
+  `;
+}
+
+function renderKpisTraficoG() {
+  const k = calcTraficoKpis(filteredTrafico());
+  document.getElementById('kpis-trafico-g').innerHTML = kpisTraficoHTML(k);
+}
+
+function renderKpisTraficoC() {
+  const k = calcTraficoKpis(filteredTraficoCeco(ceco));
+  document.getElementById('kpis-trafico-c').innerHTML = kpisTraficoHTML(k);
 }
 
 function renderKpisIngresosG() {
@@ -1266,6 +1423,7 @@ function renderCecoView() {
   document.getElementById('ceco-titulo').textContent = ceco;
   renderKpisVentasC();
   renderKpisIngresosC();
+  renderKpisTraficoC();
   renderEvolC();
   renderIngEvol();
   renderCatC();
@@ -1281,6 +1439,7 @@ function renderKpisVentasC() {
   const areaCalc = areaActivaCalc(rows);  // para calcular VM2
   const dvsAnt = delta(v,va); const dvsPpto = pctOf(v,p);
   const vxm2 = areaCalc>0 ? v/areaCalc : null;
+  const pptoVm2 = calcPptoVm2(filteredPptoVm2Ceco(ceco));
   const marcasRep = new Set(rows.filter(r=>r.venta>0).map(r=>r.marca)).size;
   const marcasFoco = new Set(rows.filter(r=>r.venta>0&&r.marca_foco==='SI').map(r=>r.marca)).size;
 
@@ -1304,6 +1463,11 @@ function renderKpisVentasC() {
       <div class="kpi-label">Venta / m²</div>
       <div class="kpi-val xs">${fm2(vxm2)}</div>
       <div class="kpi-sub">Área: ${fn(area)} m²</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Presupuesto VM2</div>
+      <div class="kpi-val xs">${fm2(pptoVm2)}</div>
+      <div class="kpi-sub">${chipPpto(pctOf(vxm2, pptoVm2))} cumpl.</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Marcas Reportando</div>
